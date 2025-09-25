@@ -1,0 +1,23 @@
+[package]
+name = "via-core-ext"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+dotenvy = "0.15"
+celestia-rpc = "0.12.0"
+celestia-types = "0.14.0"
+anyhow = "1"
+async-trait = "0.1"
+hex = "0.4"
+uuid = { version = "1", features = ["serde", "v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower-http = { version = "0.5", features = ["timeout", "trace"] }
+tower = "0.5.2"
+vise = "0.3.2"
