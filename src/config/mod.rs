@@ -51,6 +51,8 @@ impl Config {
             other => anyhow::bail!("Invalid DA_BACKEND value: {}", other),
         };
 
+        tracing::info!("Start with DA backend {:?}", da_backend);
+
         let da_node_url = env::var("VIA_DA_CLIENT_API_NODE_URL").ok();
         let da_auth_token = env::var("VIA_DA_CLIENT_AUTH_TOKEN").ok();
 
