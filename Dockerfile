@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 
 RUN useradd -m backenduser
 
-COPY --from=builder /usr/src/app/target/release/via_bridge_backend /usr/bin/via_bridge_backend
+COPY --from=builder /usr/src/app/target/release/via-core-ext /usr/bin/via_core_ext
 
 USER backenduser
 

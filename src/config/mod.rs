@@ -41,7 +41,7 @@ impl Config {
         let app_address = format!("0.0.0.0:{}", port);
 
         // Backend selection with safe default
-        let da_backend = match env::var("VIA_DA_BACKEND")
+        let da_backend = match env::var("VIA_DA_CLIENT_DA_BACKEND")
             .unwrap_or_default()
             .to_lowercase()
             .as_str()
