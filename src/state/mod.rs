@@ -41,7 +41,7 @@ impl AppState {
         Router::new()
             .route("/da/dispatch", post(dispatch_handler))
             .route("/da/inclusion/:blob_id", get(inclusion_handler))
-            .route("/health_check", get(health_check_handler))
+            .route("/health", get(health_check_handler))
             .with_state(self.into())
     }
 }
