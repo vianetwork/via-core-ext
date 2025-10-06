@@ -69,9 +69,11 @@ impl DataAvailabilityClient for CelestiaClient {
         data: Vec<u8>,
     ) -> Result<DispatchResponse, DAError> {
         let blob =
-            Blob::new(self.namespace, data.clone(), self.app_version).map_err(|error| DAError {
-                error: error.into(),
-                is_retriable: false,
+            Blob::new(self.namespace, data.clone(), None, self.app_version).map_err(|error| {
+                DAError {
+                    error: error.into(),
+                    is_retriable: false,
+                }
             })?;
 
         let commitment = Commitment::from_blob(
