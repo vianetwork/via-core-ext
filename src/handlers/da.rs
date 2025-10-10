@@ -1,6 +1,7 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, State, rejection::JsonRejection},
+    http::StatusCode,
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -22,14 +23,23 @@ pub struct InclusionResponse {
 /// POST /dispatch
 pub async fn dispatch_handler(
     State(svc): State<Arc<AppState>>,
-    Json(payload): Json<DispatchRequest>,
+    payload: Result<Json<DispatchRequest>, JsonRejection>,
 ) -> impl IntoResponse {
+    let payload = match payload {
+        Ok(Json(p)) => p,
+        Err(err) => {
+            tracing::error!("Invalid JSON: {}", err);
+            return (StatusCode::BAD_REQUEST, "Invalid JSON body").into_response();
+        }
+    };
+
     let data = match hex::decode(payload.data) {
         Ok(data) => data,
         Err(_) => {
+            tracing::error!("Invalid data format");
             return (
                 axum::http::StatusCode::BAD_REQUEST,
-                "Invalid data format".to_string(),
+                "Invalid data format, must be a hex string".to_string(),
             )
                 .into_response();
         }
@@ -38,10 +48,10 @@ pub async fn dispatch_handler(
     match svc.da_svc.dispatch_blob(payload.batch_number, data).await {
         Ok(resp) => Json(resp).into_response(),
         Err(err) => {
-            tracing::error!("dispatch_blob failed: {:?}", err);
+            tracing::error!("Error to dispatch the blob data: {}", err);
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                err.to_string(),
+                format!("Error to dispatch the blob data: {}", err),
             )
                 .into_response()
         }
@@ -60,10 +70,10 @@ pub async fn inclusion_handler(
         .into_response(),
         Ok(None) => axum::http::StatusCode::NOT_FOUND.into_response(),
         Err(err) => {
-            tracing::error!("inclusion_handler failed: {:?}", err);
+            tracing::error!("Error to fetch blob data: {}", err.root_cause());
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                err.to_string(),
+                format!("Error to fetch blob data: {}", err),
             )
                 .into_response()
         }

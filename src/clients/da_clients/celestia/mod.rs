@@ -84,7 +84,7 @@ impl DataAvailabilityClient for CelestiaClient {
             self.app_version,
         )
         .map_err(|error| DAError {
-            error: error.into(),
+            error: anyhow!("Error to create commitment: {}", error.to_string()),
             is_retriable: false,
         })?;
 
@@ -98,7 +98,7 @@ impl DataAvailabilityClient for CelestiaClient {
             .blob_submit(&[blob], tx_config)
             .await
             .map_err(|error| DAError {
-                error: error.into(),
+                error: anyhow!("Error to submit blob: {}", error.to_string()),
                 is_retriable: true,
             })?;
 
@@ -138,7 +138,7 @@ impl DataAvailabilityClient for CelestiaClient {
             )
             .await
             .map_err(|error| DAError {
-                error: error.into(),
+                error: anyhow!("Error to get blob: {}", error.to_string()),
                 is_retriable: true,
             })?;
 
