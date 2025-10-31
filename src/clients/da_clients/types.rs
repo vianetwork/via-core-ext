@@ -42,7 +42,7 @@ impl From<String> for DispatchResponse {
 }
 
 /// `InclusionData` is the data needed to verify on L1 that a blob is included in the DA layer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InclusionData {
     /// The inclusion data serialized by the DA client. Serialization is done in a way that allows
     /// the deserialization of the data in Solidity contracts.
