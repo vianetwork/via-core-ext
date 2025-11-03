@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
 
+use crate::clients::da_clients::types::{ViaDaBlob, deserialize_blob_ids};
 use crate::clients::da_clients::{
     DataAvailabilityClient,
     types::{DAError, DispatchResponse, InclusionData},
@@ -44,9 +46,57 @@ impl DataAvailabilityClient for InMemoryClient {
 
     async fn get_inclusion_data(&self, blob_id: &str) -> Result<Option<InclusionData>, DAError> {
         let storage = self.storage.lock().unwrap();
-        Ok(storage
+
+        let Some(blob) = storage
             .get(blob_id)
-            .map(|data| InclusionData { data: data.clone() }))
+            .map(|data| InclusionData { data: data.clone() })
+        else {
+            return Ok(None);
+        };
+
+        let data = match ViaDaBlob::from_bytes(&blob.data) {
+            Some(blob) => {
+                if blob.chunks == 1 {
+                    blob.data
+                } else {
+                    let blob_ids = deserialize_blob_ids(&blob.data).map_err(|_| DAError {
+                        error: anyhow!("Failed to deserialize blob ids"),
+                        is_retriable: false,
+                    })?;
+                    if blob_ids.len() != blob.chunks {
+                        return Err(DAError {
+                            error: anyhow!(
+                                "Mismatch, blob ids len [{}] != chunk size [{}]",
+                                blob_ids.len(),
+                                blob.chunks
+                            ),
+                            is_retriable: false,
+                        });
+                    }
+
+                    let mut batch_blob = vec![];
+
+                    for blob_id in blob_ids {
+                        let Some(blob) = storage
+                            .get(&blob_id)
+                            .map(|data| InclusionData { data: data.clone() })
+                        else {
+                            return Err(DAError {
+                                error: anyhow!("Failed to get blob"),
+                                is_retriable: false,
+                            });
+                        };
+
+                        batch_blob.extend_from_slice(&blob.data);
+                    }
+
+                    batch_blob
+                }
+            }
+            None => blob.data,
+        };
+
+        Ok(Some(InclusionData { data }))
     }
 
     fn clone_boxed(&self) -> Box<dyn DataAvailabilityClient> {
