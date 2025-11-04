@@ -59,6 +59,28 @@ impl CelestiaClient {
             app_version: AppVersion::V5,
         })
     }
+
+    fn parse_blob_id(&self, blob_id: &str) -> anyhow::Result<(Commitment, u64)> {
+        // [8]byte block height ++ [32]byte commitment
+        let blob_id_bytes = hex::decode(blob_id).map_err(|error| DAError {
+            error: error.into(),
+            is_retriable: false,
+        })?;
+
+        let block_height =
+            u64::from_be_bytes(blob_id_bytes[..8].try_into().map_err(|_| DAError {
+                error: anyhow!("Failed to convert block height"),
+                is_retriable: false,
+            })?);
+
+        let commitment_data: [u8; 32] = blob_id_bytes[8..40].try_into().map_err(|_| DAError {
+            error: anyhow!("Failed to convert commitment"),
+            is_retriable: false,
+        })?;
+        let commitment = Commitment::new(commitment_data);
+
+        Ok((commitment, block_height))
+    }
 }
 
 #[async_trait]
@@ -113,29 +135,14 @@ impl DataAvailabilityClient for CelestiaClient {
     }
 
     async fn get_inclusion_data(&self, blob_id: &str) -> Result<Option<InclusionData>, DAError> {
-        let blob_id_bytes = hex::decode(blob_id).map_err(|error| DAError {
+        let (commitment, block_height) = self.parse_blob_id(&blob_id).map_err(|error| DAError {
             error: error.into(),
-            is_retriable: false,
-        })?;
-
-        let block_height =
-            u64::from_be_bytes(blob_id_bytes[..8].try_into().map_err(|_| DAError {
-                error: anyhow!("Failed to convert block height"),
-                is_retriable: false,
-            })?);
-
-        let commitment_data: [u8; 32] = blob_id_bytes[8..40].try_into().map_err(|_| DAError {
-            error: anyhow!("Failed to convert commitment"),
-            is_retriable: false,
+            is_retriable: true,
         })?;
 
         let blob = self
             .client
-            .blob_get(
-                block_height,
-                self.namespace,
-                Commitment::new(commitment_data),
-            )
+            .blob_get(block_height, self.namespace, commitment)
             .await
             .map_err(|error| DAError {
                 error: anyhow!("Error to get blob: {}", error.to_string()),
@@ -165,26 +172,11 @@ impl DataAvailabilityClient for CelestiaClient {
                     let mut batch_blob = vec![];
 
                     for blob_id in blob_ids {
-                        // [8]byte block height ++ [32]byte commitment
-                        let blob_id_bytes = hex::decode(blob_id).map_err(|error| DAError {
-                            error: error.into(),
-                            is_retriable: false,
-                        })?;
-
-                        let block_height =
-                            u64::from_be_bytes(blob_id_bytes[..8].try_into().map_err(|_| {
-                                DAError {
-                                    error: anyhow!("Failed to convert block height"),
-                                    is_retriable: false,
-                                }
-                            })?);
-
-                        let commitment_data: [u8; 32] =
-                            blob_id_bytes[8..40].try_into().map_err(|_| DAError {
-                                error: anyhow!("Failed to convert commitment"),
-                                is_retriable: false,
+                        let (commitment, block_height) =
+                            self.parse_blob_id(&blob_id).map_err(|error| DAError {
+                                error: error.into(),
+                                is_retriable: true,
                             })?;
-                        let commitment = Commitment::new(commitment_data);
 
                         let blob = self
                             .client
