@@ -22,3 +22,4 @@ tower-http = { version = "0.5", features = ["timeout", "trace"] }
 tower = "0.5.2"
 vise = "0.3.2"
 sha2 = "0.10"
+bincode = "1.3"

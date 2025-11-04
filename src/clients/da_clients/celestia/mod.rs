@@ -13,7 +13,7 @@ use hex;
 
 use crate::clients::da_clients::{
     DataAvailabilityClient,
-    types::{DAError, DispatchResponse, InclusionData},
+    types::{DAError, DispatchResponse, InclusionData, ViaDaBlob, deserialize_blob_ids},
 };
 
 /// If no value is provided for GasPrice, then this will be serialized to `-1.0` which means the node that
@@ -142,7 +142,69 @@ impl DataAvailabilityClient for CelestiaClient {
                 is_retriable: true,
             })?;
 
-        Ok(Some(InclusionData { data: blob.data }))
+        let data = match ViaDaBlob::from_bytes(&blob.data) {
+            Some(blob) => {
+                if blob.chunks == 1 {
+                    blob.data
+                } else {
+                    let blob_ids = deserialize_blob_ids(&blob.data).map_err(|_| DAError {
+                        error: anyhow!("Failed to deserialize blob ids"),
+                        is_retriable: false,
+                    })?;
+                    if blob_ids.len() != blob.chunks {
+                        return Err(DAError {
+                            error: anyhow!(
+                                "Mismatch, blob ids len [{}] != chunk size [{}]",
+                                blob_ids.len(),
+                                blob.chunks
+                            ),
+                            is_retriable: false,
+                        });
+                    }
+
+                    let mut batch_blob = vec![];
+
+                    for blob_id in blob_ids {
+                        // [8]byte block height ++ [32]byte commitment
+                        let blob_id_bytes = hex::decode(blob_id).map_err(|error| DAError {
+                            error: error.into(),
+                            is_retriable: false,
+                        })?;
+
+                        let block_height =
+                            u64::from_be_bytes(blob_id_bytes[..8].try_into().map_err(|_| {
+                                DAError {
+                                    error: anyhow!("Failed to convert block height"),
+                                    is_retriable: false,
+                                }
+                            })?);
+
+                        let commitment_data: [u8; 32] =
+                            blob_id_bytes[8..40].try_into().map_err(|_| DAError {
+                                error: anyhow!("Failed to convert commitment"),
+                                is_retriable: false,
+                            })?;
+                        let commitment = Commitment::new(commitment_data);
+
+                        let blob = self
+                            .client
+                            .blob_get(block_height, self.namespace, commitment)
+                            .await
+                            .map_err(|error| DAError {
+                                error: error.into(),
+                                is_retriable: true,
+                            })?;
+
+                        batch_blob.extend_from_slice(&blob.data);
+                    }
+
+                    batch_blob
+                }
+            }
+            None => blob.data,
+        };
+
+        Ok(Some(InclusionData { data }))
     }
 
     fn clone_boxed(&self) -> Box<dyn DataAvailabilityClient> {
