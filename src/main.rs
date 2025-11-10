@@ -1,8 +1,10 @@
+use tokio::sync::watch;
 use tower_http::trace::TraceLayer;
 use via_core_ext::{config::Config, state::AppState};
 
 use axum::http::{Request, Response};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use vise_exporter::MetricsExporter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -51,10 +53,18 @@ async fn main() -> anyhow::Result<()> {
             ),
     );
 
+    let (shutdown_sender, mut shutdown_receiver) = watch::channel(());
+    let exporter = MetricsExporter::default().with_graceful_shutdown(async move {
+        shutdown_receiver.changed().await.ok();
+    });
+    tokio::spawn(exporter.start(config.metrics_address.parse().unwrap()));
+
     let listener = tokio::net::TcpListener::bind(&config.app_address).await?;
     tracing::info!("🚀 Server listening on {}", config.app_address);
 
     axum::serve(listener, app).await?;
+
+    shutdown_sender.send_replace(());
 
     Ok(())
 }

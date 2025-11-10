@@ -21,5 +21,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.5", features = ["timeout", "trace"] }
 tower = "0.5.2"
 vise = "0.3.2"
+vise-exporter = "0.3.2"
 sha2 = "0.10"
 bincode = "1.3"
