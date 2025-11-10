@@ -22,6 +22,12 @@ pub struct Config {
     /// The app address
     pub app_address: String,
 
+    /// Metric PORT
+    pub metrics_port: u16,
+
+    /// The metrics address
+    pub metrics_address: String,
+
     /// The DA backend
     pub da_backend: DaBackend,
 
@@ -38,7 +44,9 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let port = env::var("PORT")?.parse::<u16>()?;
+        let metrics_port = env::var("METRICS_PORT")?.parse::<u16>()?;
         let app_address = format!("0.0.0.0:{}", port);
+        let metrics_address = format!("0.0.0.0:{}", metrics_port);
 
         // Backend selection with safe default
         let da_backend = match env::var("VIA_DA_CLIENT_DA_BACKEND")
@@ -75,6 +83,8 @@ impl Config {
         Ok(Config {
             port,
             app_address,
+            metrics_port,
+            metrics_address,
             da_backend,
             da_node_url,
             da_auth_token,

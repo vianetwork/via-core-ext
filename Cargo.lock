@@ -2993,6 +2993,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "vise",
+ "vise-exporter",
 ]
 
 [[package]]
@@ -3007,6 +3008,21 @@ dependencies = [
  "once_cell",
  "prometheus-client",
  "vise-macros",
+]
+
+[[package]]
+name = "vise-exporter"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f9be7083dca21a182f7ba0ec98f5e87dc9e47944f624443b4e7a6c9c911679"
+dependencies = [
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "once_cell",
+ "tokio",
+ "tracing",
+ "vise",
 ]
 
 [[package]]
