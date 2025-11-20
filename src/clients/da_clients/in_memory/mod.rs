@@ -3,8 +3,11 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use sha2::{Digest, Sha256};
+use celestia_types::consts::appconsts::SHARE_VERSION_ZERO;
+use celestia_types::nmt::Namespace;
+use celestia_types::{AppVersion, Commitment};
 
+use crate::clients::da_clients::common::VIA_NAME_SPACE_BYTES;
 use crate::clients::da_clients::types::{ViaDaBlob, deserialize_blob_ids};
 use crate::clients::da_clients::{
     DataAvailabilityClient,
@@ -15,14 +18,18 @@ use crate::clients::da_clients::{
 pub struct InMemoryClient {
     storage: Arc<Mutex<HashMap<String, Vec<u8>>>>,
     blob_size_limit: usize,
+    namespace: Namespace,
 }
 
 impl InMemoryClient {
-    pub fn new(blob_size_limit: usize) -> Self {
-        Self {
+    pub fn new(blob_size_limit: usize) -> anyhow::Result<Self> {
+        let namespace = Namespace::new_v0(&VIA_NAME_SPACE_BYTES)?;
+
+        Ok(Self {
             storage: Arc::new(Mutex::new(HashMap::new())),
             blob_size_limit,
-        }
+            namespace,
+        })
     }
 }
 
@@ -33,11 +40,24 @@ impl DataAvailabilityClient for InMemoryClient {
         _batch_number: u32,
         data: Vec<u8>,
     ) -> Result<DispatchResponse, DAError> {
-        let mut hasher = Sha256::new();
-        hasher.update(&data);
-        let result = hasher.finalize();
+        let commitment = Commitment::from_blob(
+            self.namespace,
+            &data,
+            SHARE_VERSION_ZERO,
+            None,
+            AppVersion::V5,
+        )
+        .map_err(|error| DAError {
+            error: anyhow!("Error to create commitment: {}", error.to_string()),
+            is_retriable: false,
+        })?;
 
-        let blob_id = hex::encode(&result);
+        // Construct blob_id = [block_height (8 bytes) | commitment hash (32 bytes)]
+        let mut blob_id_bytes = Vec::with_capacity(8 + 32);
+        blob_id_bytes.extend_from_slice(&0u64.to_be_bytes());
+        blob_id_bytes.extend_from_slice(commitment.hash());
+
+        let blob_id = hex::encode(&blob_id_bytes);
 
         self.storage.lock().unwrap().insert(blob_id.clone(), data);
 
@@ -115,12 +135,10 @@ impl DataAvailabilityClient for InMemoryClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex;
-    use sha2::{Digest, Sha256};
 
     // helper to create a fresh client
     fn new_client() -> InMemoryClient {
-        InMemoryClient::new(1024)
+        InMemoryClient::new(1024).unwrap()
     }
 
     #[tokio::test]
@@ -131,14 +149,6 @@ mod tests {
 
         // Dispatch blob
         let response = client.dispatch_blob(1, data.clone()).await.unwrap();
-
-        // Compute expected SHA256 hash manually
-        let mut hasher = Sha256::new();
-        hasher.update(&data);
-        let expected_blob_id = hex::encode(hasher.finalize());
-
-        // Check that blob_id matches expected hash
-        assert_eq!(response.blob_id, expected_blob_id);
 
         // Retrieve blob and verify data matches
         let inclusion = client.get_inclusion_data(&response.blob_id).await.unwrap();
@@ -174,7 +184,7 @@ mod tests {
     #[test]
     fn test_blob_size_limit_returns_correct_value() {
         let limit = 4096;
-        let client = InMemoryClient::new(limit);
+        let client = InMemoryClient::new(limit).unwrap();
         assert_eq!(client.blob_size_limit(), Some(limit));
     }
 

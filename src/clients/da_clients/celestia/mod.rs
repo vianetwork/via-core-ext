@@ -13,6 +13,7 @@ use hex;
 
 use crate::clients::da_clients::{
     DataAvailabilityClient,
+    common::{VIA_NAME_SPACE_BYTES, parse_blob_id},
     types::{DAError, DispatchResponse, InclusionData, ViaDaBlob, deserialize_blob_ids},
 };
 
@@ -43,10 +44,7 @@ impl CelestiaClient {
         // Ensure connectivity by calling P2P info
         client.p2p_info().await?;
 
-        let mut namespace_bytes = [0u8; 8];
-        namespace_bytes[..3].copy_from_slice(b"VIA");
-
-        let namespace = Namespace::new_v0(&namespace_bytes).map_err(|error| DAError {
+        let namespace = Namespace::new_v0(&VIA_NAME_SPACE_BYTES).map_err(|error| DAError {
             error: error.into(),
             is_retriable: false,
         })?;
@@ -58,28 +56,6 @@ impl CelestiaClient {
             namespace,
             app_version: AppVersion::V5,
         })
-    }
-
-    fn parse_blob_id(&self, blob_id: &str) -> anyhow::Result<(Commitment, u64)> {
-        // [8]byte block height ++ [32]byte commitment
-        let blob_id_bytes = hex::decode(blob_id).map_err(|error| DAError {
-            error: error.into(),
-            is_retriable: false,
-        })?;
-
-        let block_height =
-            u64::from_be_bytes(blob_id_bytes[..8].try_into().map_err(|_| DAError {
-                error: anyhow!("Failed to convert block height"),
-                is_retriable: false,
-            })?);
-
-        let commitment_data: [u8; 32] = blob_id_bytes[8..40].try_into().map_err(|_| DAError {
-            error: anyhow!("Failed to convert commitment"),
-            is_retriable: false,
-        })?;
-        let commitment = Commitment::new(commitment_data);
-
-        Ok((commitment, block_height))
     }
 }
 
@@ -135,7 +111,7 @@ impl DataAvailabilityClient for CelestiaClient {
     }
 
     async fn get_inclusion_data(&self, blob_id: &str) -> Result<Option<InclusionData>, DAError> {
-        let (commitment, block_height) = self.parse_blob_id(&blob_id).map_err(|error| DAError {
+        let (commitment, block_height) = parse_blob_id(&blob_id).map_err(|error| DAError {
             error: error.into(),
             is_retriable: true,
         })?;
@@ -173,7 +149,7 @@ impl DataAvailabilityClient for CelestiaClient {
 
                     for blob_id in blob_ids {
                         let (commitment, block_height) =
-                            self.parse_blob_id(&blob_id).map_err(|error| DAError {
+                            parse_blob_id(&blob_id).map_err(|error| DAError {
                                 error: error.into(),
                                 is_retriable: true,
                             })?;
