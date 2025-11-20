@@ -1,4 +1,5 @@
 pub mod celestia;
+pub mod common;
 pub mod in_memory;
 pub mod types;
 
@@ -26,7 +27,7 @@ pub async fn make_da_client(
             Ok(Arc::new(client))
         }
 
-        DaBackend::InMemory => Ok(Arc::new(InMemoryClient::new(config.da_blob_size_limit))),
+        DaBackend::InMemory => Ok(Arc::new(InMemoryClient::new(config.da_blob_size_limit)?)),
     }
 }
 
